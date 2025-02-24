@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  address   String   @unique
+  username  String?  @unique
+  image     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tokens    Token[] // Tokens created by the user
+  trades    Trade[] // Trades made by the user
+  role      String? // e.g., "admin", "trader"
+  tokenDomain       TokenDomain[]
+}
+
+model Token {
+  id                String    @id @default(uuid())
+  name              String
+  symbol            String    @unique
+  contractAddress   String    @unique
+  totalSupply       Float
+  price             Float
+  image             String
+  description       String?
+  website           String?
+  twitter           String?
+  telegram          String?
+  launchDate        DateTime?
+  liquidity         Float?
+  availableOnWallet Boolean   @default(false)
+  status            String // e.g., "active", "paused", "completed"
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  creator           User      @relation(fields: [creatorId], references: [id])
+  creatorId         String
+  trades            Trade[]
+  tokenDomain       TokenDomain[]
+}
+
+model TokenDomain {
+  id          String    @id   @default(uuid())
+  tld         String    @unique
+  tokenContract   String  @unique
+  domainOwner     String 
+  user      User    @relation(fields: [domainOwner], references: [id])
+  token     Token   @relation(fields: [tokenContract], references: [contractAddress])
+}
+
+model Trade {
+  id             String    @id @default(uuid())
+  type           TradeType
+  amount         Float
+  price          Float
+  transactionFee Float? // Optional field for transaction fees
+  tradeStatus    String? // e.g., "completed", "pending", "failed"
+  txHash         String?
+  walletAddress  String
+  createdAt      DateTime  @default(now())
+  token          Token     @relation(fields: [tokenId], references: [id])
+  tokenId        String
+  user           User      @relation(fields: [userId], references: [id])
+  userId         String
+}
+
+enum TradeType {
+  BUY
+  SELL
+}
