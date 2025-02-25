@@ -80,7 +80,8 @@ export const createTrade = async (req: Request, res: Response) => {
         type: mbuy,
         walletAddress,
         price: token.price,
-        userId: req.user!.id
+        userId: req.user!.id,
+        txHash: tx_hash
       }
     });
 
