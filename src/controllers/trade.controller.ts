@@ -4,6 +4,7 @@ import { io } from '../server'; // Import the io instance
 import { addChartDataPoint, getChartData } from '../utils/chartData'; // Import chart data functions
 import Web3 from 'web3'; // Import Web3
 import { TradeType } from '@prisma/client';
+import { tokensContract } from '../lib/config';
 
 const web3 = new Web3(process.env.NETWORK_RPC_URL); // Initialize Web3 with your RPC URL
 
@@ -66,12 +67,36 @@ export const createTrade = async (req: Request, res: Response) => {
     }
 
     let mbuy;
-
     if(type === 'buy'){
       mbuy = TradeType.BUY;
     }else {
       mbuy = TradeType.SELL;
     }
+
+    // Get the latest trade for this token to determine the previous price
+    const lastTrade = await prisma.trade.findFirst({
+      where: { tokenId: token.id },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Set initial price if no previous trades, otherwise calculate new price
+    let newPrice;
+    const initialPrice = 0.001; // Initial price in ETH if no previous trades
+    const impactFactor = 0.01; // 1% price impact per token traded
+
+    if (!lastTrade) {
+      newPrice = initialPrice;
+    } else {
+      // Calculate price impact based on amount and trade type
+      const priceImpact = lastTrade.price * impactFactor * parseFloat(amount);
+      newPrice = type === 'buy' 
+        ? lastTrade.price + priceImpact  // Price increases when buying
+        : lastTrade.price - priceImpact; // Price decreases when selling
+    }
+
+    // Ensure price doesn't go below minimum
+    newPrice = Math.max(newPrice, 0.0001);
+
 
     const trade = await prisma.trade.create({
       data: {
@@ -79,7 +104,7 @@ export const createTrade = async (req: Request, res: Response) => {
         amount: parseFloat(amount),
         type: mbuy,
         walletAddress,
-        price: token.price,
+        price: newPrice,
         userId: req.user!.id,
         txHash: tx_hash
       }

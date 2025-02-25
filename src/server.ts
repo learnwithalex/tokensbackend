@@ -1,5 +1,6 @@
 import { config } from 'dotenv';
 import express from 'express';
+import cors from 'cors';
 import http from 'http';
 import { Server } from 'socket.io';
 import app from './app';
@@ -9,8 +10,14 @@ config();
 const PORT = process.env.PORT || 3000;
 
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+  }
+});
 
+// Enable CORS for all routes
+app.use(cors());
 
 // Middleware and routes setup...
 

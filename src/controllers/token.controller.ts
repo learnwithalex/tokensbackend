@@ -112,9 +112,22 @@ export const getTokenDetails = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Token not found' });
     }
 
-    // Calculate market metrics
+    // Get the latest price from the most recent trade, or use token's initial price
+    const currentPrice = token.trades.length > 0 ? token.trades[0].price : token.price;
+
+    // Find the price 24 hours ago
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const oldestTrade = token.trades.find(t => new Date(t.createdAt) <= oneDayAgo);
+    const price24hAgo = oldestTrade ? oldestTrade.price : token.price;
+
+    // Calculate 24h change percentage
+    const change24h = price24hAgo > 0 
+      ? (((currentPrice - price24hAgo) / price24hAgo) * 100).toFixed(2)
+      : "0";
+
+    // Calculate market metrics using the current price
     const volume24h = token.trades
-      .filter(t => new Date(t.createdAt) > new Date(Date.now() - 24 * 60 * 60 * 1000))
+      .filter(t => new Date(t.createdAt) > oneDayAgo)
       .reduce((sum, t) => sum + (t.amount * t.price), 0);
 
     // Calculate holdings per address
@@ -135,24 +148,67 @@ export const getTokenDetails = async (req: Request, res: Response) => {
       }))
       .sort((a, b) => parseFloat(b.percentage) - parseFloat(a.percentage)); // Sort by percentage desc
 
-    const marketCap = token.totalSupply * token.price;
-    const chartData: never[] = []; // Mock chart data
+    // Organize chart data
+    const chartData = token.trades.map(trade => ({
+      time: new Date(trade.createdAt).getTime(), // Convert to UTC timestamp
+      price: trade.price,
+      amount: 0
+    }));
+
+    // Aggregate chart data to get open, high, low, close for each hour
+    const aggregatedChartData = aggregateChartData(chartData);
 
     return res.json({
       name: token.name,
       icon: token.image,
       symbol: token.symbol,
-      price: token.price.toString(),
-      marketCap: marketCap.toString(),
-      volume24h: volume24h.toString(),
+      price: currentPrice.toString(),
+      marketCap: (token.totalSupply * currentPrice).toFixed(10).toString(),
+      volume24h: volume24h.toFixed(8).toString(),
       holders,
-      change24h: "0", // Would need historical data to calculate this
-      chartData
+      change24h: `${change24h}`,
+      chartData: aggregatedChartData // Return the organized chart data
     });
   } catch (error) {
     console.error('Get token details error:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
+};
+
+const aggregateChartData = (trades: Array<{ time: number; price: number; amount: number; }>) => {
+  const aggregated: { [key: number]: { open: number; high: number; low: number; close: number; volume: number; } } = {};
+  const timeFrame = 60 * 60 * 1000; // 1-hour intervals
+
+  trades.forEach((trade) => {
+    const timePeriod = Math.floor(trade.time / timeFrame) * timeFrame; // Group trades by hour
+
+    if (!aggregated[timePeriod]) {
+      aggregated[timePeriod] = {
+        open: trade.price,
+        high: trade.price,
+        low: trade.price,
+        close: trade.price,
+        volume: trade.amount, // Set volume as amount traded
+      };
+    } else {
+      aggregated[timePeriod].high = Math.max(aggregated[timePeriod].high, trade.price);
+      aggregated[timePeriod].low = Math.min(aggregated[timePeriod].low, trade.price);
+      aggregated[timePeriod].close = trade.price;
+      aggregated[timePeriod].volume += trade.amount; // Accumulate trade volume
+    }
+  });
+
+  // Convert object to sorted array
+  return Object.entries(aggregated)
+    .map(([time, data]) => ({
+      time: parseInt(time), // Keep as milliseconds
+      open: data.open,
+      high: data.high,
+      low: data.low,
+      close: data.close,
+      volume: data.volume,
+    }))
+    .sort((a, b) => a.time - b.time); // Sort by ascending time
 };
 
 export const getTokenChart = async (req: Request, res: Response) => {
