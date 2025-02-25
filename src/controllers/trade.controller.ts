@@ -126,7 +126,7 @@ export const getRecentTransactions = async (req: Request, res: Response) => {
       }
     });
 
-    const formattedTransactions = transactions.map((tx: { id: any; token: { image: any; symbol: any; contractAddress: string; }; txhash?: string; walletAddress: any; type: string; amount: { toString: () => any; }; }) => ({
+    const formattedTransactions = transactions.map((tx: { id: any; token: { image: any; symbol: any; contractAddress: string; }; txHash: string | null; walletAddress: any; type: string; amount: { toString: () => any; }; }) => ({
       id: tx.id,
       logo: tx.token.image,
       symbol: tx.token.symbol,
@@ -134,7 +134,7 @@ export const getRecentTransactions = async (req: Request, res: Response) => {
       type: tx.type.toLowerCase(),
       amount: tx.amount.toString(),
       contractAddress: tx.token.contractAddress,
-      txHash: tx.txhash
+      txHash: tx.txHash || ''
     }));
 
     return res.json({ transactions: formattedTransactions });
